@@ -36,48 +36,86 @@ Au démarrage, `start()` vérifie le setup et la console renvoie vers la section
 
 ## Configuration GitHub Actions
 
-L'updater télécharge le jar depuis une release GitHub taguée `auto-<branche>-latest` (format réglable avec `releaseTagFormat`), et vérifie que le workflow du commit est terminé avec succès. Il faut donc un workflow qui construit le jar et recrée cette release à chaque push, dans `.github/workflows/auto-release.yml` du plugin :
+L'updater télécharge le jar depuis une release GitHub taguée `auto-<branche>-latest` (format réglable avec `releaseTagFormat`), et vérifie que le workflow du commit est terminé avec succès. Il faut donc un workflow qui construit le jar et met à jour cette release à chaque push, dans `.github/workflows/auto-release.yml` du plugin (basé sur celui d'AigriUHC) :
 
 ```yaml
 name: Auto Build and Release
 
+# Déclenche le workflow à chaque push sur ces branches
 on:
   push:
-    branches: [main, master, develop]   # les branches à déployer
+    branches:
+      - main
+      - master
+      - develop
 
+# Permissions nécessaires pour créer des releases
 permissions:
-  contents: write   # créer la release
+  contents: write
 
 jobs:
   build-and-release:
+    name: Build et Release Automatique
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 8
+        uses: actions/setup-java@v4
         with:
           java-version: '8'
-          distribution: temurin
-          cache: gradle
+          distribution: 'temurin'
+          cache: 'gradle'
 
-      - run: chmod +x gradlew
-      - run: ./gradlew clean build -x test --no-daemon
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
-      - name: Recréer la release de la branche
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build with Gradle
+        run: ./gradlew clean build -x test --no-daemon
+
+      - name: Get build info
+        id: info
         run: |
-          TAG="auto-${GITHUB_REF_NAME}-latest"
-          gh release delete "$TAG" --cleanup-tag --yes || true
-          gh release create "$TAG" build/libs/*.jar             --target "$GITHUB_SHA"             --title "[${GITHUB_REF_NAME}] Build ${GITHUB_SHA::7}"             --notes "Build automatique du commit ${GITHUB_SHA}"
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%Y-%m-%d_%H-%M')" >> $GITHUB_OUTPUT
+
+      # Repli de l'updater si la release est absente (token requis)
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonPlugin-jar
+          path: build/libs/*.jar
+          retention-days: 90
+
+      - name: Create/Update Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: auto-${{ steps.info.outputs.branch }}-latest
+          target_commitish: ${{ github.sha }}
+          name: "[${{ steps.info.outputs.branch }}] Build ${{ steps.info.outputs.sha_short }}"
+          body: |
+            Release automatique, branche `${{ steps.info.outputs.branch }}`, commit `${{ steps.info.outputs.sha_short }}`, ${{ steps.info.outputs.date }}.
+
+            Installation sur le serveur : `/gitupdate check` puis `/gitupdate update`.
+
+            ${{ github.event.head_commit.message }}
+          files: |
+            build/libs/*.jar
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 Points importants :
-- La release est **supprimée puis recréée** avec `--target "$GITHUB_SHA"` : l'updater compare le commit de la release au dernier commit de la branche et ignore la release s'ils diffèrent (build en cours ou périmé). Mettre à jour une release existante ne déplace pas son commit.
 - Le tag doit correspondre à `releaseTagFormat` (par défaut `auto-%s-latest`, `%s` = nom de la branche).
+- `target_commitish: ${{ github.sha }}` : l'updater compare le commit de la release au dernier commit de la branche et ignore la release s'ils diffèrent (build en cours ou périmé), puis retombe sur la dernière release. Sans cette ligne la release est rattachée au nom de la branche et non au commit.
 - Le jar doit être dans `build/libs/`. Les jars `*sources*` et `*javadoc*` sont ignorés par l'updater.
 - `permissions: contents: write` est obligatoire pour que `GITHUB_TOKEN` puisse créer la release.
-- Optionnel, pour le repli sur les artifacts (token requis) : ajouter un step `actions/upload-artifact@v4` avec `name: <plugin>-jar` et `path: build/libs/*.jar`.
+- Adapter `name: MonPlugin-jar` et la liste des branches.
 
 ## Résolution de problèmes
 
