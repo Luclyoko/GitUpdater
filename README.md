@@ -12,7 +12,7 @@ Copier `GitUpdater-<version>.jar` (`./gradlew build`, jar dans `build/libs/`) da
 
 ```gradle
 repositories { maven { url 'https://jitpack.io' } }
-dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.0.1' }  // 1.0.0 = tag git
+dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.0.2' }  // 1.0.0 = tag git
 ```
 
 `plugin.yml` : `depend: [GitUpdater]`
@@ -30,7 +30,7 @@ cmd.complete(sender, args);        // tab completion
 
 Options (`UpdaterOptions`) : `installDir`, `defaultBranch` (`master`), `releaseTagFormat` (`auto-%s-latest`), `userAgent`, `commandName` (`gitupdate`, affiché dans les messages).
 
-La config de chaque plugin est dans `<dataFolder du plugin>/git-updater.yml` (branche, auto-update, intervalle en secondes, dernier commit, token).
+La config de chaque plugin est dans `plugins/GitUpdater/<nom du plugin>.yml` (le `name` du `plugin.yml`), tout au même endroit : branche, auto-update, intervalle en secondes, dernier commit, token.
 
 Au démarrage, `start()` vérifie le setup et la console renvoie vers la section ci-dessous correspondant au problème.
 
@@ -54,7 +54,7 @@ Erreur 404 / 401 / 403 : la branche n'existe pas, le dépôt est privé, le toke
    - *Repository access* > **Only select repositories** > choisir uniquement le dépôt du plugin.
    - *Repository permissions* : **Contents: Read-only** (releases et branches) et **Actions: Read-only** (état du build et artifacts). *Metadata: Read-only* est ajouté automatiquement.
    - Ne pas utiliser un token *classic* avec le scope `repo` : il donne accès à tous tes dépôts.
-3. Copier le token (`github_pat_...`) puis le donner : `/gitupdate token <token>` ou `github-token` dans `git-updater.yml`.
+3. Copier le token (`github_pat_...`) puis le donner : `/gitupdate token <token>` ou `github-token` dans `plugins/GitUpdater/<nom du plugin>.yml`.
 4. Tester : `/gitupdate check`.
 
 ### Release par branche

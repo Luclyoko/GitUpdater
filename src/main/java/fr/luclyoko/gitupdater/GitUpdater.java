@@ -44,6 +44,7 @@ public class GitUpdater {
     /** Démarre la vérification périodique si elle est activée dans la config. */
     public void start() {
         plugin.getLogger().info("GitUpdater sur " + options.repoUrl + " (branche " + config.getBranch() + ")");
+        plugin.getLogger().info("Config: " + config.getFile().getAbsolutePath());
         if (config.isAutoUpdateEnabled()) {
             startAutoUpdate();
         }

@@ -1,13 +1,15 @@
 package fr.luclyoko.gitupdater;
 
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
 
 /**
- * Configuration persistée dans {@code <dataFolder>/git-updater.yml}.
+ * Configuration persistée dans {@code plugins/GitUpdater/<nom du plugin>.yml}, un fichier par plugin.
  */
 public class UpdaterConfig {
 
@@ -19,7 +21,9 @@ public class UpdaterConfig {
 
     UpdaterConfig(JavaPlugin plugin, String defaultBranch) {
         this.plugin = plugin;
-        this.file = new File(plugin.getDataFolder(), "git-updater.yml");
+        Plugin updater = Bukkit.getPluginManager().getPlugin("GitUpdater");
+        File dir = updater != null ? updater.getDataFolder() : new File("plugins/GitUpdater");
+        this.file = new File(dir, plugin.getName() + ".yml");
         file.getParentFile().mkdirs();
         this.config = YamlConfiguration.loadConfiguration(file);
 
@@ -38,7 +42,7 @@ public class UpdaterConfig {
         try {
             config.save(file);
         } catch (IOException e) {
-            plugin.getLogger().severe("Impossible de sauvegarder git-updater.yml: " + e.getMessage());
+            plugin.getLogger().severe("Impossible de sauvegarder " + file.getPath() + ": " + e.getMessage());
         }
     }
 
