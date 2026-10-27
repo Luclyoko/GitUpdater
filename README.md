@@ -34,6 +34,51 @@ La config de chaque plugin est dans `plugins/GitUpdater/<nom du plugin>.yml` (le
 
 Au démarrage, `start()` vérifie le setup et la console renvoie vers la section ci-dessous correspondant au problème.
 
+## Configuration GitHub Actions
+
+L'updater télécharge le jar depuis une release GitHub taguée `auto-<branche>-latest` (format réglable avec `releaseTagFormat`), et vérifie que le workflow du commit est terminé avec succès. Il faut donc un workflow qui construit le jar et recrée cette release à chaque push, dans `.github/workflows/auto-release.yml` du plugin :
+
+```yaml
+name: Auto Build and Release
+
+on:
+  push:
+    branches: [main, master, develop]   # les branches à déployer
+
+permissions:
+  contents: write   # créer la release
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: temurin
+          cache: gradle
+
+      - run: chmod +x gradlew
+      - run: ./gradlew clean build -x test --no-daemon
+
+      - name: Recréer la release de la branche
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="auto-${GITHUB_REF_NAME}-latest"
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release create "$TAG" build/libs/*.jar             --target "$GITHUB_SHA"             --title "[${GITHUB_REF_NAME}] Build ${GITHUB_SHA::7}"             --notes "Build automatique du commit ${GITHUB_SHA}"
+```
+
+Points importants :
+- La release est **supprimée puis recréée** avec `--target "$GITHUB_SHA"` : l'updater compare le commit de la release au dernier commit de la branche et ignore la release s'ils diffèrent (build en cours ou périmé). Mettre à jour une release existante ne déplace pas son commit.
+- Le tag doit correspondre à `releaseTagFormat` (par défaut `auto-%s-latest`, `%s` = nom de la branche).
+- Le jar doit être dans `build/libs/`. Les jars `*sources*` et `*javadoc*` sont ignorés par l'updater.
+- `permissions: contents: write` est obligatoire pour que `GITHUB_TOKEN` puisse créer la release.
+- Optionnel, pour le repli sur les artifacts (token requis) : ajouter un step `actions/upload-artifact@v4` avec `name: <plugin>-jar` et `path: build/libs/*.jar`.
+
 ## Résolution de problèmes
 
 ### URL du depot
@@ -59,4 +104,4 @@ Erreur 404 / 401 / 403 : la branche n'existe pas, le dépôt est privé, le toke
 
 ### Release par branche
 
-L'updater cherche d'abord la release taguée `auto-<branche>-latest` (format réglable avec `releaseTagFormat`) contenant le jar. Le workflow GitHub Actions du projet doit la publier à chaque push (voir `.github/workflows/auto-release.yml` d'AigriUHC). Sans elle l'updater retombe sur la dernière release, puis sur les artifacts Actions (token requis), mais le setup reste incomplet.
+Aucune release `auto-<branche>-latest` n'a été trouvée : le workflow décrit dans [Configuration GitHub Actions](#configuration-github-actions) n'est pas en place, n'a pas encore tourné pour cette branche, ou a échoué. Sans elle l'updater retombe sur la dernière release, puis sur les artifacts Actions (token requis), mais le setup reste incomplet.
