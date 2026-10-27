@@ -1,0 +1,38 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'com.github.Luclyoko'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+    maven { url = uri('https://hub.spigotmc.org/nexus/content/repositories/snapshots/') }
+}
+
+dependencies {
+    // Fourni par le serveur
+    compileOnly('org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT') { transitive = false }
+    compileOnly 'com.google.code.gson:gson:2.2.4'
+    compileOnly 'org.yaml:snakeyaml:1.15'
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+// JitPack lance publishToMavenLocal
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+}

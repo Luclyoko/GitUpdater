@@ -1,0 +1,5 @@
+name: GitUpdater
+main: fr.luclyoko.gitupdater.GitUpdaterPlugin
+version: "1.0.0"
+author: Luclyoko
+load: STARTUP
