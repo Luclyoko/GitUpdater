@@ -12,7 +12,7 @@ Copier `GitUpdater-<version>.jar` (`./gradlew build`, jar dans `build/libs/`) da
 
 ```gradle
 repositories { maven { url 'https://jitpack.io' } }
-dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.0.0' }  // 1.0.0 = tag git
+dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.0.1' }  // 1.0.0 = tag git
 ```
 
 `plugin.yml` : `depend: [GitUpdater]`
