@@ -181,7 +181,7 @@ public class UpdaterCommand {
 
     private void token(CommandSender s, String[] args) {
         if (args.length < 2) {
-            s.sendMessage(ChatColor.RED + "Usage: token <token> (https://github.com/settings/tokens, scope 'repo')");
+            s.sendMessage(ChatColor.RED + "Usage: token <token> (token fine-grained limité au dépôt, voir le README)");
             return;
         }
         config.setGitHubToken(args[1]);

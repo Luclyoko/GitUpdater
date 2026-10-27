@@ -49,8 +49,12 @@ Le dossier de `.installDir(...)` doit exister (ou être créable) et être acces
 Erreur 404 / 401 / 403 : la branche n'existe pas, le dépôt est privé, le token est invalide ou la limite de 60 requêtes/h sans token est atteinte.
 
 1. Vérifier la branche : `/gitupdate list`, puis `/gitupdate branch <nom>`.
-2. Pour un dépôt privé : https://github.com/settings/tokens > *Generate new token (classic)* > cocher `repo`.
-3. Donner le token : `/gitupdate token <token>` ou `github-token` dans `git-updater.yml`.
+2. Pour un dépôt privé, créer un token **limité à ce seul dépôt** (fine-grained) :
+   https://github.com/settings/personal-access-tokens/new
+   - *Repository access* > **Only select repositories** > choisir uniquement le dépôt du plugin.
+   - *Repository permissions* : **Contents: Read-only** (releases et branches) et **Actions: Read-only** (état du build et artifacts). *Metadata: Read-only* est ajouté automatiquement.
+   - Ne pas utiliser un token *classic* avec le scope `repo` : il donne accès à tous tes dépôts.
+3. Copier le token (`github_pat_...`) puis le donner : `/gitupdate token <token>` ou `github-token` dans `git-updater.yml`.
 4. Tester : `/gitupdate check`.
 
 ### Release par branche
