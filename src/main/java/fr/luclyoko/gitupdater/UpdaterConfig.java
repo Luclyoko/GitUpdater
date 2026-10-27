@@ -32,6 +32,8 @@ public class UpdaterConfig {
         save();
     }
 
+    public File getFile() { return file; }
+
     private void save() {
         try {
             config.save(file);

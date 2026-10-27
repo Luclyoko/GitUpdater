@@ -47,6 +47,77 @@ public class GitUpdater {
         if (config.isAutoUpdateEnabled()) {
             startAutoUpdate();
         }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::diagnose);
+    }
+
+    // ---------------------------------------------------------------- diagnostic de setup
+
+    private static class HttpException extends IOException {
+        final int code;
+
+        HttpException(int code) {
+            super("HTTP " + code);
+            this.code = code;
+        }
+    }
+
+    private static final String README = "https://github.com/Luclyoko/GitUpdater#";
+
+    /** Vérifie le setup et renvoie vers le README à la première anomalie bloquante. */
+    private void diagnose() {
+        String branch = config.getBranch();
+
+        if (!options.repoUrl.matches("^https://github\\.com/[^/]+/[^/]+?(\\.git)?$")) {
+            problem("URL du dépôt invalide: " + options.repoUrl, "url-du-depot");
+            return;
+        }
+
+        options.installDir.mkdirs();
+        if (!options.installDir.isDirectory() || !options.installDir.canWrite()) {
+            problem("Dossier d'installation inutilisable: " + options.installDir.getAbsolutePath(), "dossier-dinstallation");
+            return;
+        }
+
+        try {
+            api("/branches/" + branch);
+        } catch (HttpException e) {
+            switch (e.code) {
+                case 404:
+                    problem("Dépôt ou branche '" + branch + "' introuvable (HTTP 404)" + (config.hasGitHubToken() ? "" : ", aucun token configuré"), "depot-prive-et-token");
+                    break;
+                case 401:
+                    problem("Token GitHub invalide ou expiré (HTTP 401)", "depot-prive-et-token");
+                    break;
+                case 403:
+                    problem("Accès refusé par GitHub (HTTP 403), limite de requêtes sans token ?", "depot-prive-et-token");
+                    break;
+                default:
+                    plugin.getLogger().warning("[GitUpdater] Vérification du setup impossible: " + e.getMessage());
+            }
+            return;
+        } catch (IOException e) {
+            plugin.getLogger().warning("[GitUpdater] Vérification du setup impossible (réseau ?): " + e.getMessage());
+            return;
+        }
+
+        String tag = String.format(options.releaseTagFormat, branch);
+        try {
+            api("/releases/tags/" + tag);
+        } catch (HttpException e) {
+            if (e.code == 404) {
+                problem("Aucune release '" + tag + "' sur le dépôt", "release-par-branche");
+                return;
+            }
+        } catch (IOException ignored) {
+            return;
+        }
+
+        plugin.getLogger().info("[GitUpdater] Setup OK" + (config.isAutoUpdateEnabled() ? "." : ", mise à jour auto désactivée: /" + options.commandName + " auto on"));
+    }
+
+    private void problem(String message, String anchor) {
+        plugin.getLogger().warning("[GitUpdater] Setup incomplet: " + message);
+        plugin.getLogger().warning("[GitUpdater] Tutoriel: " + README + anchor);
     }
 
     public UpdaterConfig getConfig() {
@@ -292,11 +363,8 @@ public class GitUpdater {
     private String api(String endpoint) throws IOException {
         HttpURLConnection conn = open(apiBase + endpoint, 10000);
         int code = conn.getResponseCode();
-        if (code == 404 && !config.hasGitHubToken()) {
-            plugin.getLogger().severe("HTTP 404 sur " + apiBase + endpoint + " - dépôt privé ? Configurez un token (scope 'repo') avec /<commande> token <token>");
-        }
         if (code != 200) {
-            throw new IOException("HTTP " + code);
+            throw new HttpException(code);
         }
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"))) {
             StringBuilder sb = new StringBuilder();
