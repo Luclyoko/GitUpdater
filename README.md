@@ -108,6 +108,21 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Historique : une prerelease par build, les 20 dernières sont gardées par branche
+      - name: Create build history release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.info.outputs.branch }}"
+          gh release create "${BRANCH}-build-${{ github.run_number }}" build/libs/*.jar \
+            --target "$GITHUB_SHA" \
+            --title "[${BRANCH}] Build #${{ github.run_number }} (${{ steps.info.outputs.sha_short }})" \
+            --notes "Build #${{ github.run_number }}, commit ${GITHUB_SHA}" \
+            --prerelease
+          gh release list --limit 1000 --json tagName,createdAt \
+            --jq "[.[] | select(.tagName | startswith(\"${BRANCH}-build-\"))] | sort_by(.createdAt) | reverse | .[20:] | .[].tagName" \
+            | while read -r OLD; do gh release delete "$OLD" --cleanup-tag --yes; done
 ```
 
 Points importants :
@@ -115,7 +130,9 @@ Points importants :
 - `target_commitish: ${{ github.sha }}` : l'updater compare le commit de la release au dernier commit de la branche et ignore la release s'ils diffèrent (build en cours ou périmé), puis retombe sur la dernière release. Sans cette ligne la release est rattachée au nom de la branche et non au commit.
 - Le jar doit être dans `build/libs/`. Les jars `*sources*` et `*javadoc*` sont ignorés par l'updater.
 - `permissions: contents: write` est obligatoire pour que `GITHUB_TOKEN` puisse créer la release.
-- Adapter `name: MonPlugin-jar` et la liste des branches.
+- Le dernier step crée une release par build (tag `<branche>-build-<numéro du run>`), marquée **prerelease** pour que le repli `/releases/latest` de l'updater les ignore, et supprime les plus anciennes au-delà de 20 par branche (`.[20:]`). Les supprimer avec `--cleanup-tag` retire aussi leur tag. Changer `20` pour garder plus ou moins d'historique.
+- Adapter `name: MonPlugin-jar`, la liste des branches et le chemin du jar (`build/libs/*.jar`).
+- Gradle 9 exige Java 17 pour tourner : mettre `java-version: '17'` et fixer la cible avec `options.release = 8` dans `build.gradle`. Gradle 8.x tourne sur JDK 8.
 
 ## Résolution de problèmes
 
