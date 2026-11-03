@@ -15,6 +15,8 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -24,6 +26,9 @@ import java.util.zip.ZipInputStream;
  * Usage: {@code GitUpdater updater = new GitUpdater(this, new UpdaterOptions(url, "Mon-Plugin_")); updater.start();}
  */
 public class GitUpdater {
+
+    /** Updaters démarrés, par nom de plugin, pour la commande /gitupdater <plugin>. */
+    static final Map<String, GitUpdater> REGISTRY = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
     private final JavaPlugin plugin;
     private final UpdaterOptions options;
@@ -43,6 +48,7 @@ public class GitUpdater {
 
     /** Démarre la vérification périodique si elle est activée dans la config. */
     public void start() {
+        REGISTRY.put(plugin.getName(), this);
         plugin.getLogger().info("GitUpdater sur " + options.repoUrl + " (branche " + config.getBranch() + ")");
         plugin.getLogger().info("Config: " + config.getFile().getAbsolutePath());
         if (config.isAutoUpdateEnabled()) {
@@ -113,12 +119,16 @@ public class GitUpdater {
             return;
         }
 
-        plugin.getLogger().info("[GitUpdater] Setup OK" + (config.isAutoUpdateEnabled() ? "." : ", mise à jour auto désactivée: /" + options.commandName + " auto on"));
+        plugin.getLogger().info("[GitUpdater] Setup OK" + (config.isAutoUpdateEnabled() ? "." : ", mise à jour auto désactivée: /gup " + plugin.getName() + " auto on"));
     }
 
     private void problem(String message, String anchor) {
         plugin.getLogger().warning("[GitUpdater] Setup incomplet: " + message);
         plugin.getLogger().warning("[GitUpdater] Tutoriel: " + README + anchor);
+    }
+
+    JavaPlugin getPlugin() {
+        return plugin;
     }
 
     public UpdaterConfig getConfig() {

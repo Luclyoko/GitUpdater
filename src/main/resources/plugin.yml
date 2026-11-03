@@ -1,5 +1,13 @@
 name: GitUpdater
 main: fr.luclyoko.gitupdater.GitUpdaterPlugin
-version: "1.0.2"
+version: "1.1.0"
 author: Luclyoko
 load: STARTUP
+commands:
+  gitupdater:
+    description: Mises à jour des plugins via GitUpdater
+    aliases: [gup]
+    permission: gitupdater.admin
+permissions:
+  gitupdater.admin:
+    default: op

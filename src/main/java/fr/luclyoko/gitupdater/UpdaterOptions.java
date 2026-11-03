@@ -13,7 +13,6 @@ public class UpdaterOptions {
     String defaultBranch = "master";
     String releaseTagFormat = "auto-%s-latest";
     String userAgent;
-    String commandName = "gitupdate";
 
     /**
      * @param repoUrl   https://github.com/user/repo
@@ -44,12 +43,6 @@ public class UpdaterOptions {
 
     public UpdaterOptions userAgent(String userAgent) {
         this.userAgent = userAgent;
-        return this;
-    }
-
-    /** Nom de la commande d'admin, utilisé dans le tutoriel de setup. Défaut: gitupdate */
-    public UpdaterOptions commandName(String commandName) {
-        this.commandName = commandName;
         return this;
     }
 }

@@ -1,6 +1,6 @@
 # GitUpdater
 
-Plugin Bukkit 1.8.8 (et lib) qui met à jour d'autres plugins depuis les releases GitHub : `/gitupdate check|update|branch|list|auto|info|token`.
+Plugin Bukkit 1.8.8 (et lib) qui met à jour d'autres plugins depuis les releases GitHub, via une seule commande pour tous : `/gitupdater <plugin> check|update|branch|list|auto|info|token` (alias `/gup`, permission `gitupdater.admin`, op par défaut).
 
 ## Installation sur le serveur
 
@@ -12,7 +12,7 @@ Copier `GitUpdater-<version>.jar` (`./gradlew build`, jar dans `build/libs/`) da
 
 ```gradle
 repositories { maven { url 'https://jitpack.io' } }
-dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.0.2' }  // 1.0.0 = tag git
+dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.1.0' }  // 1.0.0 = tag git
 ```
 
 `plugin.yml` : `depend: [GitUpdater]`
@@ -20,15 +20,10 @@ dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.0.2' }  // 1.0.0 = 
 ```java
 GitUpdater updater = new GitUpdater(this, new UpdaterOptions("https://github.com/user/repo", "MonPlugin_")
         .installDir(new File("plugins/SupUHC/modules")));   // optionnel, défaut: plugins/
-updater.start();
-
-// commande : relayer vers UpdaterCommand
-UpdaterCommand cmd = new UpdaterCommand(updater);
-cmd.handle(sender, args);          // exécution
-cmd.complete(sender, args);        // tab completion
+updater.start();   // enregistre le plugin dans /gup <nom du plugin>
 ```
 
-Options (`UpdaterOptions`) : `installDir`, `defaultBranch` (`master`), `releaseTagFormat` (`auto-%s-latest`), `userAgent`, `commandName` (`gitupdate`, affiché dans les messages).
+Options (`UpdaterOptions`) : `installDir`, `defaultBranch` (`master`), `releaseTagFormat` (`auto-%s-latest`), `userAgent`.
 
 La config de chaque plugin est dans `plugins/GitUpdater/<nom du plugin>.yml` (le `name` du `plugin.yml`), tout au même endroit : branche, auto-update, intervalle en secondes, dernier commit, token.
 
@@ -99,7 +94,7 @@ jobs:
           body: |
             Release automatique, branche `${{ steps.info.outputs.branch }}`, commit `${{ steps.info.outputs.sha_short }}`, ${{ steps.info.outputs.date }}.
 
-            Installation sur le serveur : `/gitupdate check` puis `/gitupdate update`.
+            Installation sur le serveur : `/gup <plugin> check` puis `/gup <plugin> update`.
 
             ${{ github.event.head_commit.message }}
           files: |
@@ -148,14 +143,14 @@ Le dossier de `.installDir(...)` doit exister (ou être créable) et être acces
 
 Erreur 404 / 401 / 403 : la branche n'existe pas, le dépôt est privé, le token est invalide ou la limite de 60 requêtes/h sans token est atteinte.
 
-1. Vérifier la branche : `/gitupdate list`, puis `/gitupdate branch <nom>`.
+1. Vérifier la branche : `/gup <plugin> list`, puis `/gup <plugin> branch <nom>`.
 2. Pour un dépôt privé, créer un token **limité à ce seul dépôt** (fine-grained) :
    https://github.com/settings/personal-access-tokens/new
    - *Repository access* > **Only select repositories** > choisir uniquement le dépôt du plugin.
    - *Repository permissions* : **Contents: Read-only** (releases et branches) et **Actions: Read-only** (état du build et artifacts). *Metadata: Read-only* est ajouté automatiquement.
    - Ne pas utiliser un token *classic* avec le scope `repo` : il donne accès à tous tes dépôts.
-3. Copier le token (`github_pat_...`) puis le donner : `/gitupdate token <token>` ou `github-token` dans `plugins/GitUpdater/<nom du plugin>.yml`.
-4. Tester : `/gitupdate check`.
+3. Copier le token (`github_pat_...`) puis le donner : `/gup <plugin> token <token>` ou `github-token` dans `plugins/GitUpdater/<nom du plugin>.yml`.
+4. Tester : `/gup <plugin> check`.
 
 ### Release par branche
 

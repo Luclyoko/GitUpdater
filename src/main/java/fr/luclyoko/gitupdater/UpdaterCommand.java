@@ -2,7 +2,6 @@ package fr.luclyoko.gitupdater;
 
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,26 +10,21 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * Logique de la commande d'admin, indépendante du framework de commandes:
- * appeler {@link #handle} / {@link #complete} depuis un CommandExecutor / TabCompleter / @Command.
+ * Sous-commandes de /gitupdater <plugin> pour un updater.
  */
-public class UpdaterCommand {
+class UpdaterCommand {
 
     private static final List<String> SUB = Arrays.asList("check", "update", "branch", "list", "auto", "info", "token");
 
     private final GitUpdater updater;
     private final UpdaterConfig config;
 
-    public UpdaterCommand(GitUpdater updater) {
+    UpdaterCommand(GitUpdater updater) {
         this.updater = updater;
         this.config = updater.getConfig();
     }
 
-    public void handle(CommandSender sender, String[] args) {
-        if (sender instanceof Player && !sender.isOp()) {
-            sender.sendMessage(ChatColor.RED + "Vous n'avez pas la permission d'utiliser cette commande.");
-            return;
-        }
+    void handle(CommandSender sender, String[] args) {
         if (args.length == 0) {
             help(sender);
             return;
@@ -47,11 +41,8 @@ public class UpdaterCommand {
         }
     }
 
-    public List<String> complete(CommandSender sender, String[] args) {
+    List<String> complete(String[] args) {
         List<String> out = new ArrayList<>();
-        if (sender instanceof Player && !sender.isOp()) {
-            return out;
-        }
         String last = args[args.length - 1].toLowerCase();
         if (args.length == 1) {
             out.addAll(SUB);
