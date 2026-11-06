@@ -5,6 +5,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -18,10 +19,25 @@ public class GitUpdaterPlugin extends JavaPlugin {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length == 2 && args[0].equalsIgnoreCase("all")
+                && (args[1].equalsIgnoreCase("check") || args[1].equalsIgnoreCase("update"))) {
+            boolean install = args[1].equalsIgnoreCase("update");
+            List<String> all = names();
+            sender.sendMessage(GitUpdater.prefix("GitUpdater") + (install ? "Mise à jour" : "Vérification") + " de " + all.size() + " plugin(s)...");
+            for (String n : all) {
+                new UpdaterCommand(find(n)).checkThenMaybeUpdate(sender, install);
+            }
+            return true;
+        }
         GitUpdater updater = args.length == 0 ? null : find(args[0]);
         if (updater == null) {
-            sender.sendMessage(ChatColor.RED + "Usage: /" + label + " <plugin> [check|update|branch|list|auto|info|token]");
-            sender.sendMessage(ChatColor.GRAY + "Plugins: " + ChatColor.AQUA + String.join(", ", names()));
+            String p = GitUpdater.prefix("GitUpdater");
+            if (args.length > 0 && !args[0].equalsIgnoreCase("all")) {
+                sender.sendMessage(p + ChatColor.RED + "✗ Plugin " + args[0] + " inconnu.");
+            }
+            sender.sendMessage(p + "Plugins : " + ChatColor.AQUA + String.join(ChatColor.GRAY + ", " + ChatColor.AQUA, names()));
+            sender.sendMessage(p + ChatColor.AQUA + "/" + label + " <plugin>" + ChatColor.GRAY + " pour l'aide d'un plugin, "
+                    + ChatColor.AQUA + "/" + label + " all <check|update>" + ChatColor.GRAY + " pour tous.");
             return true;
         }
         new UpdaterCommand(updater).handle(sender, Arrays.copyOfRange(args, 1, args.length));
@@ -34,7 +50,13 @@ public class GitUpdaterPlugin extends JavaPlugin {
             return Collections.emptyList();
         }
         if (args.length == 1) {
-            return names().stream().filter(n -> n.toLowerCase().startsWith(args[0].toLowerCase())).collect(Collectors.toList());
+            List<String> first = new ArrayList<>(names());
+            first.add("all");
+            return first.stream().filter(n -> n.toLowerCase().startsWith(args[0].toLowerCase())).collect(Collectors.toList());
+        }
+        if (args[0].equalsIgnoreCase("all")) {
+            return args.length == 2 ? Arrays.asList("check", "update").stream()
+                    .filter(n -> n.startsWith(args[1].toLowerCase())).collect(Collectors.toList()) : Collections.emptyList();
         }
         GitUpdater updater = find(args[0]);
         return updater == null ? Collections.emptyList() : new UpdaterCommand(updater).complete(Arrays.copyOfRange(args, 1, args.length));

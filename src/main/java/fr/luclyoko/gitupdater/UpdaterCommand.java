@@ -19,9 +19,17 @@ class UpdaterCommand {
     private final GitUpdater updater;
     private final UpdaterConfig config;
 
+    private final String name;
+
     UpdaterCommand(GitUpdater updater) {
         this.updater = updater;
         this.config = updater.getConfig();
+        this.name = updater.getPlugin().getName();
+    }
+
+    /** Préfixe chaque message du nom du plugin concerné. */
+    private void send(CommandSender s, String message) {
+        s.sendMessage(GitUpdater.prefix(name) + message);
     }
 
     void handle(CommandSender sender, String[] args) {
@@ -60,51 +68,70 @@ class UpdaterCommand {
     }
 
     private void help(CommandSender s) {
-        s.sendMessage(ChatColor.GOLD + "========== " + ChatColor.YELLOW + "GitUpdate Help" + ChatColor.GOLD + " ==========");
-        s.sendMessage(ChatColor.AQUA + "check" + ChatColor.GRAY + " - Vérifie s'il y a une mise à jour");
-        s.sendMessage(ChatColor.AQUA + "update" + ChatColor.GRAY + " - Force une mise à jour");
-        s.sendMessage(ChatColor.AQUA + "branch <nom>" + ChatColor.GRAY + " - Change de branche");
-        s.sendMessage(ChatColor.AQUA + "list" + ChatColor.GRAY + " - Liste les branches");
-        s.sendMessage(ChatColor.AQUA + "auto <on|off|interval <s>>" + ChatColor.GRAY + " - Mise à jour auto");
-        s.sendMessage(ChatColor.AQUA + "info" + ChatColor.GRAY + " - Infos actuelles");
-        s.sendMessage(ChatColor.AQUA + "token <token>" + ChatColor.GRAY + " - Token GitHub (dépôts privés)");
+        String cmd = ChatColor.AQUA + "/gup " + name + " ";
+        String sep = ChatColor.DARK_GRAY + " - " + ChatColor.GRAY;
+        s.sendMessage(GitUpdater.prefix(name) + "Commandes :");
+        s.sendMessage(cmd + "check" + sep + "vérifier les mises à jour");
+        s.sendMessage(cmd + "update" + sep + "installer la dernière version");
+        s.sendMessage(cmd + "branch <nom>" + sep + "changer de branche");
+        s.sendMessage(cmd + "list" + sep + "voir les branches");
+        s.sendMessage(cmd + "auto <on|off|interval <s>>" + sep + "mise à jour auto");
+        s.sendMessage(cmd + "info" + sep + "état actuel");
+        s.sendMessage(cmd + "token <token>" + sep + "token GitHub (dépôt privé)");
+    }
+
+    private String branchName() {
+        return ChatColor.AQUA + config.getBranch() + ChatColor.GRAY;
     }
 
     private void check(CommandSender s) {
-        s.sendMessage(ChatColor.YELLOW + "Vérification en cours...");
-        updater.checkForUpdates().thenAccept(has -> s.sendMessage(has
-                ? ChatColor.GREEN + "✓ Mise à jour disponible sur " + ChatColor.AQUA + config.getBranch() + ChatColor.GREEN + ", faites update."
-                : ChatColor.GREEN + "✓ À jour sur la branche " + ChatColor.AQUA + config.getBranch()))
-                .exceptionally(t -> {
-                    s.sendMessage(ChatColor.RED + "✗ Erreur: " + t.getMessage());
-                    return null;
-                });
+        updater.checkForUpdates().thenAccept(has -> send(s, has
+                ? ChatColor.YELLOW + "Mise à jour disponible" + ChatColor.GRAY + " sur " + branchName() + ", faites " + ChatColor.AQUA + "/gup " + name + " update"
+                : ChatColor.GREEN + "✓ Déjà à jour" + ChatColor.GRAY + " (" + branchName() + ")"));
+    }
+
+    /** /gup all check|update : vérifie chaque plugin, et avec update installe ceux qui ont une mise à jour. */
+    void checkThenMaybeUpdate(CommandSender s, boolean install) {
+        if (updater.isUpdating()) {
+            send(s, ChatColor.YELLOW + "Mise à jour déjà en cours...");
+            return;
+        }
+        updater.checkForUpdates().thenAccept(has -> {
+            if (!has) {
+                send(s, ChatColor.GREEN + "✓ Déjà à jour" + ChatColor.GRAY + " (" + branchName() + ")");
+            } else if (install) {
+                send(s, ChatColor.YELLOW + "Téléchargement..." + ChatColor.GRAY + " (" + branchName() + ")");
+                updater.performUpdate();
+            } else {
+                send(s, ChatColor.YELLOW + "Mise à jour disponible" + ChatColor.GRAY + " (" + branchName() + ")");
+            }
+        });
     }
 
     private void update(CommandSender s) {
         if (updater.isUpdating()) {
-            s.sendMessage(ChatColor.RED + "Une mise à jour est déjà en cours.");
+            send(s, ChatColor.YELLOW + "Mise à jour déjà en cours...");
             return;
         }
-        s.sendMessage(ChatColor.YELLOW + "Démarrage de la mise à jour...");
+        send(s, ChatColor.YELLOW + "Téléchargement..." + ChatColor.GRAY + " (" + branchName() + ")");
         updater.performUpdate();
     }
 
     private void branch(CommandSender s, String[] args) {
         if (args.length < 2) {
-            s.sendMessage(ChatColor.RED + "Usage: branch <nom> (actuelle: " + config.getBranch() + ")");
+            send(s, "Branche actuelle : " + branchName() + ". Changer : " + ChatColor.AQUA + "/gup " + name + " branch <nom>");
             return;
         }
         if (updater.isUpdating()) {
-            s.sendMessage(ChatColor.RED + "Une mise à jour est déjà en cours.");
+            send(s, ChatColor.YELLOW + "Mise à jour déjà en cours...");
             return;
         }
         updater.switchBranch(args[1]).thenAccept(ok -> {
             if (ok) {
-                s.sendMessage(ChatColor.GREEN + "✓ Branche " + ChatColor.AQUA + args[1] + ChatColor.GREEN + ", mise à jour...");
+                send(s, "Branche " + ChatColor.AQUA + args[1] + ChatColor.GRAY + ", téléchargement...");
                 updater.performUpdate();
             } else {
-                s.sendMessage(ChatColor.RED + "✗ Branche introuvable ou erreur (voir logs).");
+                send(s, ChatColor.RED + "✗ Branche " + args[1] + " introuvable" + ChatColor.GRAY + " (voir " + ChatColor.AQUA + "/gup " + name + " list" + ChatColor.GRAY + ")");
             }
         });
     }
@@ -115,67 +142,65 @@ class UpdaterCommand {
             case "on":
                 config.setAutoUpdateEnabled(true);
                 updater.startAutoUpdate();
-                s.sendMessage(ChatColor.GREEN + "✓ Mise à jour auto activée (" + config.getCheckInterval() + "s)");
+                send(s, "Mise à jour auto " + ChatColor.GREEN + "activée" + ChatColor.GRAY + ", toutes les " + GitUpdater.duration(config.getCheckInterval()));
                 break;
             case "off":
                 config.setAutoUpdateEnabled(false);
                 updater.stopAutoUpdate();
-                s.sendMessage(ChatColor.GREEN + "✓ Mise à jour auto désactivée");
+                send(s, "Mise à jour auto " + ChatColor.RED + "désactivée");
                 break;
             case "interval":
                 try {
                     int seconds = Integer.parseInt(args[2]);
                     if (seconds < 60) {
-                        s.sendMessage(ChatColor.RED + "L'intervalle minimum est de 60 secondes.");
+                        send(s, ChatColor.RED + "✗ Minimum 60 secondes.");
                         return;
                     }
                     config.setCheckInterval(seconds);
                     if (config.isAutoUpdateEnabled()) {
                         updater.startAutoUpdate();
                     }
-                    s.sendMessage(ChatColor.GREEN + "✓ Intervalle: " + seconds + "s");
+                    send(s, "Vérification toutes les " + ChatColor.AQUA + GitUpdater.duration(seconds));
                 } catch (RuntimeException e) {
-                    s.sendMessage(ChatColor.RED + "Usage: auto interval <secondes>");
+                    send(s, ChatColor.RED + "Usage : " + ChatColor.AQUA + "/gup " + name + " auto interval <secondes>");
                 }
                 break;
             default:
-                s.sendMessage(ChatColor.RED + "Usage: auto <on|off|interval <secondes>> (actuel: "
-                        + (config.isAutoUpdateEnabled() ? "on" : "off") + ")");
+                send(s, "Mise à jour auto " + (config.isAutoUpdateEnabled() ? ChatColor.GREEN + "on" : ChatColor.RED + "off")
+                        + ChatColor.GRAY + " (" + GitUpdater.duration(config.getCheckInterval()) + "). "
+                        + ChatColor.AQUA + "/gup " + name + " auto <on|off|interval <s>>");
         }
     }
 
     private void list(CommandSender s) {
         updater.getAvailableBranches().thenAccept(branches -> {
             if (branches.isEmpty()) {
-                s.sendMessage(ChatColor.RED + "Aucune branche trouvée.");
+                send(s, ChatColor.RED + "✗ Aucune branche trouvée" + ChatColor.GRAY + " (voir console)");
                 return;
             }
-            for (String b : branches) {
-                s.sendMessage(b.equals(config.getBranch())
-                        ? ChatColor.GREEN + "► " + ChatColor.AQUA + b + ChatColor.GRAY + " (actuelle)"
-                        : ChatColor.GRAY + "  " + ChatColor.WHITE + b);
-            }
+            String joined = branches.stream()
+                    .map(b -> b.equals(config.getBranch()) ? ChatColor.GREEN + "► " + b + ChatColor.GRAY : ChatColor.WHITE + b + ChatColor.GRAY)
+                    .collect(Collectors.joining(", "));
+            send(s, "Branches : " + joined);
         });
     }
 
     private void info(CommandSender s) {
         String commit = config.getLastCommit();
-        s.sendMessage(ChatColor.GRAY + "Dépôt: " + ChatColor.AQUA + updater.getRepoUrl());
-        s.sendMessage(ChatColor.GRAY + "Branche: " + ChatColor.AQUA + config.getBranch());
-        s.sendMessage(ChatColor.GRAY + "Auto: " + (config.isAutoUpdateEnabled() ? ChatColor.GREEN + "on" : ChatColor.RED + "off")
-                + ChatColor.GRAY + " (" + config.getCheckInterval() + "s)");
-        if (!commit.isEmpty()) {
-            s.sendMessage(ChatColor.GRAY + "Dernier commit: " + ChatColor.AQUA + commit.substring(0, Math.min(8, commit.length())));
-        }
-        s.sendMessage(ChatColor.GRAY + "Statut: " + (updater.isUpdating() ? ChatColor.YELLOW + "Mise à jour en cours..." : ChatColor.GREEN + "Prêt"));
+        send(s, "Branche " + branchName()
+                + (commit.isEmpty() ? "" : ChatColor.DARK_GRAY + " @ " + ChatColor.AQUA + GitUpdater.shortSha(commit) + ChatColor.GRAY)
+                + ", auto " + (config.isAutoUpdateEnabled() ? ChatColor.GREEN + "on" : ChatColor.RED + "off")
+                + ChatColor.GRAY + " (" + GitUpdater.duration(config.getCheckInterval()) + ")"
+                + (updater.isUpdating() ? ChatColor.YELLOW + ", mise à jour en cours..." : ""));
+        send(s, "Dépôt : " + ChatColor.WHITE + updater.getRepoUrl());
     }
 
     private void token(CommandSender s, String[] args) {
         if (args.length < 2) {
-            s.sendMessage(ChatColor.RED + "Usage: token <token> (token fine-grained limité au dépôt, voir le README)");
+            send(s, "Usage : " + ChatColor.AQUA + "/gup " + name + " token <token>" + ChatColor.GRAY + " (fine-grained, limité au dépôt)");
             return;
         }
         config.setGitHubToken(args[1]);
-        s.sendMessage(ChatColor.GREEN + "✓ Token enregistré. Testez avec: check");
+        send(s, ChatColor.GREEN + "✓ Token enregistré." + ChatColor.GRAY + " Testez : " + ChatColor.AQUA + "/gup " + name + " check");
     }
 }

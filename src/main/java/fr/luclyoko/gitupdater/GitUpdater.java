@@ -127,6 +127,30 @@ public class GitUpdater {
         plugin.getLogger().warning("[GitUpdater] Tutoriel: " + README + anchor);
     }
 
+    // ---------------------------------------------------------------- messages ingame
+
+    /** {@code [Plugin] } en tête de chaque message, texte en gris par défaut. */
+    static String prefix(String pluginName) {
+        return ChatColor.DARK_GRAY + "[" + ChatColor.GOLD + pluginName + ChatColor.DARK_GRAY + "] " + ChatColor.GRAY;
+    }
+
+    static String shortSha(String sha) {
+        return sha.substring(0, Math.min(7, sha.length()));
+    }
+
+    /** 300 -> "5 min", 3600 -> "1 h", 90 -> "90 s". */
+    static String duration(int seconds) {
+        if (seconds % 3600 == 0) return seconds / 3600 + " h";
+        if (seconds % 60 == 0) return seconds / 60 + " min";
+        return seconds + " s";
+    }
+
+    /** Message aux seuls admins (gitupdater.admin), pas aux joueurs. */
+    private void notifyAdmins(String message) {
+        String line = prefix(plugin.getName()) + message;
+        Bukkit.getScheduler().runTask(plugin, () -> Bukkit.broadcast(line, "gitupdater.admin"));
+    }
+
     JavaPlugin getPlugin() {
         return plugin;
     }
@@ -149,7 +173,7 @@ public class GitUpdater {
                 checkForUpdates().thenAccept(hasUpdate -> {
                     if (hasUpdate && !updating) {
                         plugin.getLogger().info("Nouvelle mise à jour détectée sur GitHub !");
-                        Bukkit.broadcastMessage(ChatColor.YELLOW + "[GitUpdater] Nouvelle mise à jour détectée ! Téléchargement en cours...");
+                        notifyAdmins(ChatColor.YELLOW + "Nouvelle version détectée, téléchargement...");
                         Bukkit.getScheduler().runTaskLater(plugin, this::performUpdate, 100L);
                     }
                 }), 200L, config.getCheckInterval() * 20L);
@@ -184,8 +208,8 @@ public class GitUpdater {
             if (commit == null) {
                 return false;
             }
+            // lastCommit n'est mis à jour qu'après une installation réussie (performUpdate)
             config.setBranch(branch);
-            config.setLastCommit(commit);
             return true;
         });
     }
@@ -217,14 +241,14 @@ public class GitUpdater {
 
                 if (commit != null && !waitForBuild(commit)) {
                     plugin.getLogger().warning("Le build n'est pas terminé ou a échoué");
-                    Bukkit.getScheduler().runTask(plugin, () ->
-                            Bukkit.broadcastMessage(ChatColor.RED + "[GitUpdater] Le build n'est pas prêt, réessayez plus tard"));
+                    notifyAdmins(ChatColor.RED + "Build GitHub pas prêt ou échoué, réessayez plus tard.");
                     return;
                 }
 
-                File jar = downloadFromBranchRelease(branch);
-                if (jar == null) jar = downloadLatestReleaseJar();
-                if (jar == null) jar = downloadFromActions();
+                // Ordre : release immuable du build de ce commit, puis release auto-<branche>-latest, puis artifacts
+                File jar = commit == null ? null : downloadFromBuildRelease(branch, commit);
+                if (jar == null) jar = downloadFromBranchRelease(branch, commit);
+                if (jar == null) jar = downloadFromActions(branch, commit);
                 if (jar == null) throw new IOException("Impossible de récupérer le JAR");
 
                 installJar(jar, branch);
@@ -232,19 +256,13 @@ public class GitUpdater {
                     config.setLastCommit(commit);
                 }
 
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    Bukkit.broadcastMessage(ChatColor.GREEN + "═══════════════════════════════════════════");
-                    Bukkit.broadcastMessage(ChatColor.GOLD + "    [GitUpdater] Mise à jour téléchargée");
-                    Bukkit.broadcastMessage(ChatColor.YELLOW + "Le serveur doit être redémarré pour appliquer.");
-                    Bukkit.broadcastMessage(ChatColor.GREEN + "═══════════════════════════════════════════");
-                    Bukkit.getOnlinePlayers().stream().filter(p -> p.isOp()).forEach(p -> {
-                        p.sendMessage(ChatColor.AQUA + "Branche: " + ChatColor.WHITE + branch);
-                        p.sendMessage(ChatColor.YELLOW + "Utilisez /stop pour redémarrer");
-                    });
-                });
+                notifyAdmins(ChatColor.GREEN + "✓ Mis à jour " + ChatColor.GRAY + "(" + ChatColor.AQUA + branch
+                        + (commit != null ? ChatColor.DARK_GRAY + " @ " + ChatColor.AQUA + shortSha(commit) : "")
+                        + ChatColor.GRAY + "), redémarrez le serveur pour l'appliquer.");
             } catch (Exception e) {
                 plugin.getLogger().severe("Erreur mise à jour: " + e.getMessage());
                 e.printStackTrace();
+                notifyAdmins(ChatColor.RED + "✗ Échec de la mise à jour: " + e.getMessage() + ChatColor.GRAY + " (détails en console)");
             } finally {
                 updating = false;
             }
@@ -253,28 +271,40 @@ public class GitUpdater {
 
     // ---------------------------------------------------------------- téléchargement
 
-    private File downloadFromBranchRelease(String branch) {
+    /**
+     * Release créée pour ce build précis (tag {@code <branche>-build-<n>}, cible = le sha), jamais réécrite :
+     * son jar correspond forcément au commit, contrairement à auto-<branche>-latest qui est remplacée à chaque push.
+     */
+    private File downloadFromBuildRelease(String branch, String commit) {
+        String autoTag = String.format(options.releaseTagFormat, branch);
+        try {
+            for (com.google.gson.JsonElement e : new JsonParser().parse(api("/releases?per_page=50")).getAsJsonArray()) {
+                JsonObject release = e.getAsJsonObject();
+                if (!release.get("draft").getAsBoolean()
+                        && commit.equals(release.get("target_commitish").getAsString())
+                        && !autoTag.equals(release.get("tag_name").getAsString())) {
+                    File jar = downloadJarAsset(release);
+                    if (jar != null) return jar;
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().info("Pas de release de build pour " + shortSha(commit) + ": " + e.getMessage());
+        }
+        return null;
+    }
+
+    private File downloadFromBranchRelease(String branch, String commit) {
         try {
             JsonObject release = new JsonParser().parse(api("/releases/tags/" + String.format(options.releaseTagFormat, branch))).getAsJsonObject();
 
             String target = release.get("target_commitish").getAsString();
-            String latest = getLatestCommit(branch);
-            if (latest != null && !target.equals(latest)) {
+            if (commit != null && !target.equals(commit)) {
                 plugin.getLogger().warning("La release ne correspond pas au dernier commit, build probablement en cours");
                 return null;
             }
             return downloadJarAsset(release);
         } catch (Exception e) {
             plugin.getLogger().info("Pas de release pour la branche " + branch + ": " + e.getMessage());
-            return null;
-        }
-    }
-
-    private File downloadLatestReleaseJar() {
-        try {
-            return downloadJarAsset(new JsonParser().parse(api("/releases/latest")).getAsJsonObject());
-        } catch (Exception e) {
-            plugin.getLogger().info("Pas de release disponible: " + e.getMessage());
             return null;
         }
     }
@@ -291,14 +321,20 @@ public class GitUpdater {
         return null;
     }
 
-    /** Les artifacts Actions sont des ZIP et exigent un token. */
-    private File downloadFromActions() {
+    /** Les artifacts Actions sont des ZIP et exigent un token. Liste triée du plus récent au plus ancien. */
+    private File downloadFromActions(String branch, String commit) {
         try {
             JsonArray artifacts = new JsonParser().parse(api("/actions/artifacts")).getAsJsonObject().getAsJsonArray("artifacts");
             for (com.google.gson.JsonElement e : artifacts) {
                 JsonObject artifact = e.getAsJsonObject();
                 String name = artifact.get("name").getAsString();
-                if (name.contains("jar") || name.contains("build")) {
+                JsonObject run = artifact.getAsJsonObject("workflow_run");
+                // Avec le commit connu, on exige l'artifact de ce commit précis, sinon celui de la branche
+                String field = commit != null ? "head_sha" : "head_branch";
+                String expected = commit != null ? commit : branch;
+                boolean matches = run != null && run.has(field) && !run.get(field).isJsonNull()
+                        && expected.equals(run.get(field).getAsString());
+                if (matches &&(name.contains("jar") || name.contains("build"))) {
                     File zip = download(artifact.get("archive_download_url").getAsString());
                     return zip == null ? null : extractJar(zip);
                 }
@@ -400,15 +436,18 @@ public class GitUpdater {
     /** Le workflow Actions de ce commit doit être terminé avec succès. */
     private boolean isBuildComplete(String sha) {
         try {
-            JsonArray runs = new JsonParser().parse(api("/actions/runs?per_page=10")).getAsJsonObject().getAsJsonArray("workflow_runs");
+            // Tous les workflows de ce commit doivent être terminés : avant, le premier trouvé suffisait,
+            // et un autre workflow fini plus tôt laissait passer pendant que la release était encore en cours d'écriture.
+            JsonArray runs = new JsonParser().parse(api("/actions/runs?head_sha=" + sha)).getAsJsonObject().getAsJsonArray("workflow_runs");
+            boolean anySuccess = false;
             for (com.google.gson.JsonElement e : runs) {
                 JsonObject run = e.getAsJsonObject();
-                if (run.get("head_sha").getAsString().equals(sha)) {
-                    return "completed".equals(run.get("status").getAsString())
-                            && !run.get("conclusion").isJsonNull()
-                            && "success".equals(run.get("conclusion").getAsString());
+                if (!"completed".equals(run.get("status").getAsString())) {
+                    return false;
                 }
+                anySuccess |= !run.get("conclusion").isJsonNull() && "success".equals(run.get("conclusion").getAsString());
             }
+            return anySuccess;
         } catch (Exception e) {
             plugin.getLogger().warning("Erreur vérification build: " + e.getMessage());
         }

@@ -1,6 +1,6 @@
 # GitUpdater
 
-Plugin Bukkit 1.8.8 (et lib) qui met à jour d'autres plugins depuis les releases GitHub, via une seule commande pour tous : `/gitupdater <plugin> check|update|branch|list|auto|info|token` (alias `/gup`, permission `gitupdater.admin`, op par défaut).
+Plugin Bukkit 1.8.8 (et lib) qui met à jour d'autres plugins depuis les releases GitHub, via une seule commande pour tous : `/gitupdater <plugin> check|update|branch|list|auto|info|token`, ou `/gitupdater all check|update` pour vérifier / mettre à jour tous les plugins d'un coup (alias `/gup`, permission `gitupdater.admin`, op par défaut).
 
 ## Installation sur le serveur
 
@@ -12,7 +12,7 @@ Copier `GitUpdater-<version>.jar` (`./gradlew build`, jar dans `build/libs/`) da
 
 ```gradle
 repositories { maven { url 'https://jitpack.io' } }
-dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.1.0' }  // 1.0.0 = tag git
+dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.2.0' }  // 1.0.0 = tag git
 ```
 
 `plugin.yml` : `depend: [GitUpdater]`
@@ -122,10 +122,11 @@ jobs:
 
 Points importants :
 - Le tag doit correspondre à `releaseTagFormat` (par défaut `auto-%s-latest`, `%s` = nom de la branche).
-- `target_commitish: ${{ github.sha }}` : l'updater compare le commit de la release au dernier commit de la branche et ignore la release s'ils diffèrent (build en cours ou périmé), puis retombe sur la dernière release. Sans cette ligne la release est rattachée au nom de la branche et non au commit.
+- `target_commitish: ${{ github.sha }}` : l'updater compare le commit de la release au dernier commit de la branche et ignore la release s'ils diffèrent (build en cours ou périmé), puis retombe sur les artifacts Actions de la même branche. Sans cette ligne la release est rattachée au nom de la branche et non au commit.
 - Le jar doit être dans `build/libs/`. Les jars `*sources*` et `*javadoc*` sont ignorés par l'updater.
 - `permissions: contents: write` est obligatoire pour que `GITHUB_TOKEN` puisse créer la release.
-- Le dernier step crée une release par build (tag `<branche>-build-<numéro du run>`), marquée **prerelease** pour que le repli `/releases/latest` de l'updater les ignore, et supprime les plus anciennes au-delà de 20 par branche (`.[20:]`). Les supprimer avec `--cleanup-tag` retire aussi leur tag. Changer `20` pour garder plus ou moins d'historique.
+- Le dernier step crée une release par build (tag `<branche>-build-<numéro du run>`), marquée **prerelease** pour ne pas encombrer la page des releases, et supprime les plus anciennes au-delà de 20 par branche (`.[20:]`). Les supprimer avec `--cleanup-tag` retire aussi leur tag. Changer `20` pour garder plus ou moins d'historique.
+- Ces releases de build ne sont jamais réécrites : l'updater prend en priorité celle dont la cible est le commit à installer, ce qui garantit que le jar correspond au commit. `auto-<branche>-latest`, réécrite à chaque push, ne sert qu'en repli. L'updater attend aussi que **tous** les workflows du commit soient terminés avant de télécharger.
 - Adapter `name: MonPlugin-jar`, la liste des branches et le chemin du jar (`build/libs/*.jar`).
 - Gradle 9 exige Java 17 pour tourner : mettre `java-version: '17'` et fixer la cible avec `options.release = 8` dans `build.gradle`. Gradle 8.x tourne sur JDK 8.
 
@@ -154,4 +155,4 @@ Erreur 404 / 401 / 403 : la branche n'existe pas, le dépôt est privé, le toke
 
 ### Release par branche
 
-Aucune release `auto-<branche>-latest` n'a été trouvée : le workflow décrit dans [Configuration GitHub Actions](#configuration-github-actions) n'est pas en place, n'a pas encore tourné pour cette branche, ou a échoué. Sans elle l'updater retombe sur la dernière release, puis sur les artifacts Actions (token requis), mais le setup reste incomplet.
+Aucune release `auto-<branche>-latest` n'a été trouvée : le workflow décrit dans [Configuration GitHub Actions](#configuration-github-actions) n'est pas en place, n'a pas encore tourné pour cette branche, ou a échoué. Sans elle l'updater retombe sur les artifacts Actions de la même branche (token requis), jamais sur le jar d'une autre branche, mais le setup reste incomplet.
