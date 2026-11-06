@@ -1,6 +1,6 @@
 # GitUpdater
 
-Plugin Bukkit 1.8.8 (et lib) qui met à jour d'autres plugins depuis les releases GitHub, via une seule commande pour tous : `/gitupdater <plugin> check|update|branch|list|auto|info|token`, ou `/gitupdater all check|update` pour vérifier / mettre à jour tous les plugins d'un coup (alias `/gup`, permission `gitupdater.admin`, op par défaut).
+Plugin Bukkit 1.8.8 (et lib) qui met à jour d'autres plugins depuis les releases GitHub, via une seule commande pour tous : `/gitupdater <plugin> check|update|branch|list|auto|info|token`, ou `/gitupdater all check|update|branch <nom>` pour vérifier, mettre à jour ou changer de branche tous les plugins d'un coup (alias `/gup`, permission `gitupdater.admin`, op par défaut).
 
 ## Installation sur le serveur
 
@@ -12,7 +12,7 @@ Copier `GitUpdater-<version>.jar` (`./gradlew build`, jar dans `build/libs/`) da
 
 ```gradle
 repositories { maven { url 'https://jitpack.io' } }
-dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.2.0' }  // 1.0.0 = tag git
+dependencies { compileOnly 'com.github.Luclyoko:GitUpdater:1.2.1' }  // 1.0.0 = tag git
 ```
 
 `plugin.yml` : `depend: [GitUpdater]`

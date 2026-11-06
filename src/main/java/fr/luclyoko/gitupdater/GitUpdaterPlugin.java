@@ -29,6 +29,14 @@ public class GitUpdaterPlugin extends JavaPlugin {
             }
             return true;
         }
+        if (args.length == 3 && args[0].equalsIgnoreCase("all") && args[1].equalsIgnoreCase("branch")) {
+            List<String> all = names();
+            sender.sendMessage(GitUpdater.prefix("GitUpdater") + "Passage de " + all.size() + " plugin(s) sur " + ChatColor.AQUA + args[2] + ChatColor.GRAY + "...");
+            for (String n : all) {
+                new UpdaterCommand(find(n)).handle(sender, new String[]{"branch", args[2]});
+            }
+            return true;
+        }
         GitUpdater updater = args.length == 0 ? null : find(args[0]);
         if (updater == null) {
             String p = GitUpdater.prefix("GitUpdater");
@@ -37,7 +45,7 @@ public class GitUpdaterPlugin extends JavaPlugin {
             }
             sender.sendMessage(p + "Plugins : " + ChatColor.AQUA + String.join(ChatColor.GRAY + ", " + ChatColor.AQUA, names()));
             sender.sendMessage(p + ChatColor.AQUA + "/" + label + " <plugin>" + ChatColor.GRAY + " pour l'aide d'un plugin, "
-                    + ChatColor.AQUA + "/" + label + " all <check|update>" + ChatColor.GRAY + " pour tous.");
+                    + ChatColor.AQUA + "/" + label + " all <check|update|branch <nom>>" + ChatColor.GRAY + " pour tous.");
             return true;
         }
         new UpdaterCommand(updater).handle(sender, Arrays.copyOfRange(args, 1, args.length));
@@ -55,7 +63,7 @@ public class GitUpdaterPlugin extends JavaPlugin {
             return first.stream().filter(n -> n.toLowerCase().startsWith(args[0].toLowerCase())).collect(Collectors.toList());
         }
         if (args[0].equalsIgnoreCase("all")) {
-            return args.length == 2 ? Arrays.asList("check", "update").stream()
+            return args.length == 2 ? Arrays.asList("check", "update", "branch").stream()
                     .filter(n -> n.startsWith(args[1].toLowerCase())).collect(Collectors.toList()) : Collections.emptyList();
         }
         GitUpdater updater = find(args[0]);
